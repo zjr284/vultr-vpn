@@ -118,7 +118,12 @@ if [ "$RESET" = "1" ] && [ -f "$CONFIG" ]; then
   warn "--reset：删除旧配置，重新生成密钥（客户端需要重新导入）"
   rm -f "$CONFIG"
 fi
-[ -f "$CONFIG" ] || gen_config
+if [ ! -f "$CONFIG" ]; then
+  case "$MODE" in
+    links|check) die "还没有 config.env，先完整执行一次部署（bash setup.sh）";;
+    *) gen_config;;
+  esac
+fi
 # 补全老配置里缺的字段
 [ -n "${SUB_TOKEN:-}" ] || { SUB_TOKEN="dsh-sub-$(openssl rand -hex 4)"; echo "SUB_TOKEN=\"$SUB_TOKEN\"" >>"$CONFIG"; }
 [ -n "${HY2_PASSWORD:-}" ] || { HY2_PASSWORD="$(openssl rand -hex 8)"; echo "HY2_PASSWORD=\"$HY2_PASSWORD\"" >>"$CONFIG"; }
@@ -139,6 +144,9 @@ fi
 log "默认网卡=$IFACE 公网IP=$PUB_IP 域名=$DOMAIN"
 
 links() {
+  if [ -z "${XRAY_UUID:-}" ] || [ -z "${XRAY_PUBKEY:-}" ] || [ -z "${HY2_PASSWORD:-}" ]; then
+    die "config.env 不完整（缺 XRAY_UUID / XRAY_PUBKEY / HY2_PASSWORD），先完整执行一次部署"
+  fi
   printf 'vless://%s@%s:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=%s&fp=chrome&pbk=%s&sid=%s&type=tcp#%s-Reality\n' \
     "$XRAY_UUID" "$DOMAIN" "$XRAY_SNI" "$XRAY_PUBKEY" "$XRAY_SHORTID" "${1:-Tokyo}"
   printf 'hysteria2://%s@%s:443/?sni=%s#%s-Hysteria2\n' \
@@ -149,6 +157,7 @@ if [ "$MODE" = "links" ]; then links; exit 0; fi
 
 # ---------------------------------------------------------------- 体检
 check() {
+  [ -f "$CONFIG" ] || die "还没有 config.env，先执行一次部署：bash setup.sh"
   local fail=0
   printf '%-26s %-10s %s\n' "检查项" "结果" "说明"
   printf '%-26s %-10s %s\n' "------" "----" "----"
