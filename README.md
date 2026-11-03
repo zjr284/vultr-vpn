@@ -4,6 +4,8 @@
 [![release](https://img.shields.io/github/v/release/zjr284/vultr-vpn)](https://github.com/zjr284/vultr-vpn/releases)
 [![license](https://img.shields.io/github/license/zjr284/vultr-vpn)](LICENSE)
 
+**中文** · [English](README.en.md)
+
 > 一条命令，在自己的 VPS 上搭好三通道代理：**WireGuard + Xray Reality + Hysteria2**，外加一个订阅地址。
 
 写这套东西的起因很简单：市面上的"一键脚本"要么只给一种协议，要么把密钥写死在脚本里、换个 IP 就得重配所有客户端。这里的目标是——**换服务器时，客户端只需要改一个地址**。
