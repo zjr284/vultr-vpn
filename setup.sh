@@ -223,6 +223,9 @@ net.ipv4.tcp_wmem = 4096 65536 33554432
 net.core.netdev_max_backlog = 16384
 net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_fastopen = 3
+# 交互式连接（网页/SSH/RDP）的延迟相关项
+net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_notsent_lowat = 131072
 EOF
 sysctl -q --system
 
