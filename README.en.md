@@ -9,6 +9,9 @@
 
 中文说明 → [README.md](README.md)
 
+> ⭐ If it saves you an afternoon, a [star](https://github.com/zjr284/vultr-vpn/stargazers) helps other people find it.
+> Built and battle-tested with **DeepSeek Harness** — including the agent deploy path, which the harness ran end-to-end on a live VPS.
+
 ---
 
 ## Why another one-click script?

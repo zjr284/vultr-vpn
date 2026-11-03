@@ -13,6 +13,8 @@
 > 🚀 **第一次接触服务器？** 先看 [**零基础教程**](docs/beginner.md)：不用买域名、不用懂 Linux，全程复制粘贴，30 分钟从注册 Vultr 到手机能上网。
 >
 > 🤖 **想让 AI 帮你部署？** 把 [docs/agent-deploy.md](docs/agent-deploy.md) 丢给 Claude Code / Codex / Cursor / DSH 这类会执行命令的 agent，它会自己连服务器、装好、体检、验证订阅，最后只把订阅地址交给你。人只需要提供 SSH 和一句“帮我部署”。
+>
+> ⭐ **觉得有用？** 点个 [Star](https://github.com/zjr284/vultr-vpn/stargazers) 支持一下。本项目与全部文档均在 **DeepSeek Harness** 中开发与实测，`agent_deploy.py` 那条路径也是它自己跑通的。
 
 ---
 
