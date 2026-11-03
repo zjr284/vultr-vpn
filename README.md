@@ -81,6 +81,19 @@ bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/main/instal
 | `bash setup.sh --cert-only` | 证书没签下来时补签 |
 | `bash setup.sh --reset` | 重新生成全部密钥（客户端要重新导入） |
 
+### 版本与发布
+
+每个版本打 `vX.Y.Z` tag，[Releases](../../releases) 里附带打包好的 `vultr-vpn-vX.Y.Z.tar.gz` 和 `SHA256SUMS`。
+
+生产环境建议**锁定版本**，避免 `main` 上的改动影响正在跑的机器：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/v1.0.0/install.sh) \
+     --ref v1.0.0 --domain vpn.example.com
+```
+
+不写 `--ref` 时跟随 `main`（最新）。CI 会在每次推送时跑 `bash -n`、`shellcheck -S error`、Python 语法检查，以及一段"真实 IP/密钥泄漏"扫描。
+
 跑完会打印类似：
 
 ```
@@ -129,6 +142,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/main/instal
 ├── setup.sh              # 主脚本
 ├── config.example.env    # 配置模板（真实配置是 config.env，已 gitignore）
 ├── scripts/sub.py        # 订阅服务（含网页版清单）
+├── .github/workflows/    # CI（语法/shellcheck/密钥扫描）+ 打 tag 自动发 Release
 ├── docs/
 │   ├── beginner.md       # 零基础教程（不买域名、复制粘贴即可）
 │   ├── 01-server.md      # 选机器、开防火墙

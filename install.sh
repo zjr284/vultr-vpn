@@ -7,7 +7,8 @@
 #     bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/main/install.sh) \
 #          --domain vpn.example.com
 #
-#  可选参数（原样传给 setup.sh）：
+#  可选参数（其余原样传给 setup.sh）：
+#     --ref <v1.0.0|main>    指定版本，默认 main（生产环境建议锁定版本号）
 #     --domain <域名>        用自己的域名（不填则用 <IP>.sslip.io）
 #     --vultr-key <APIKEY>   自动开 Vultr 防火墙端口
 #     --vultr-fw <组名>      没有防火墙组时新建一个并挂上（默认 vpn）
@@ -26,6 +27,17 @@ RED=$'\033[31m'; GRN=$'\033[32m'; YEL=$'\033[33m'; NC=$'\033[0m'
 log()  { echo "${GRN}[+ ]${NC} $*"; }
 warn() { echo "${YEL}[! ]${NC} $*"; }
 die()  { echo "${RED}[x ]${NC} $*" >&2; exit 1; }
+
+# --ref 由本脚本消费，其余参数透传给 setup.sh
+PASS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --ref)   REF="$2"; shift 2;;
+    --ref=*) REF="${1#*=}"; shift;;
+    *)       PASS+=("$1"); shift;;
+  esac
+done
+set -- "${PASS[@]}"
 
 [ "$(id -u)" = "0" ] || die "请用 root 运行（sudo -i 后重试）"
 command -v curl >/dev/null || die "缺少 curl"
