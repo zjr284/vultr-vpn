@@ -3,14 +3,30 @@
 ## 前置条件
 
 - Ubuntu 22.04 / 24.04，root 权限
-- 防火墙已放行 tcp 22 / 80 / 443、udp 443 / 51821（见 [01-server.md](01-server.md)）
 - 能访问 GitHub（脚本要从 GitHub 装 Xray 和 Hysteria2）
+- 防火墙放行 tcp 22 / 80 / 443、udp 443 / 51821 —— 或者给脚本一个 Vultr API Key，它自己开
+
+## 方式零：一行（推荐）
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/main/install.sh) --domain vpn.example.com
+```
+
+连防火墙一起：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/main/install.sh) \
+     --vultr-key "$VULTR_API_KEY" --vultr-fw vpn --domain vpn.example.com
+```
+
+脚本会自动下载仓库到 `/opt/vultr-vpn`、装依赖、配三通道、签证书、起订阅、打印二维码。
+重复执行是安全的（幂等），升级脚本版本也只需要重跑这一行。
 
 ## 方式一：用 sslip.io 自动域名（零成本）
 
 ```bash
-scp setup.sh root@<IP>:/root/
-ssh root@<IP> "bash /root/setup.sh"
+scp -r . root@<IP>:/opt/vultr-vpn/     # 或者 git clone
+ssh root@<IP> "bash /opt/vultr-vpn/setup.sh"
 ```
 
 脚本会从公网 IP 推导域名，例如 IP 是 `203.0.113.10`，域名就是 `203-0-113-10.sslip.io`。
@@ -31,7 +47,7 @@ ssh root@<IP> "bash /root/setup.sh"
 3. 部署：
 
    ```bash
-   ssh root@<IP> "bash /root/setup.sh --domain vpn.example.com"
+   bash /opt/vultr-vpn/setup.sh --domain vpn.example.com
    ```
 
 之后换 IP 只需要改这条 A 记录，**客户端一个字都不用动**——这是自建代理里性价比最高的一步。

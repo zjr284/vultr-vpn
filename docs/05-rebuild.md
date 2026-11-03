@@ -44,16 +44,20 @@ Hostname  : wg-tokyo
 ## 3. 部署
 
 ```bash
-scp setup.sh root@<新IP>:/root/
-ssh root@<新IP> "bash /root/setup.sh"
+bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/main/install.sh) --domain vpn.example.com
 ```
+
+> 仓库里已经有 `config.env` 的话（比如你把它拷到了新机器 `/opt/vultr-vpn/config.env`），
+> 脚本会**复用**这些密钥——客户端连导入都不用重来。
 
 **两种模式，取决于你之前有没有用域名：**
 
 ### 有域名（推荐做法）
 
+用你自己的域名部署（A 记录先指向新 IP，等 `dig` 生效再跑）：
+
 ```bash
-bash /root/setup.sh --domain vpn.example.com
+bash /opt/vultr-vpn/setup.sh --domain vpn.example.com
 ```
 
 1. 去 DNS 把 A 记录改成新 IP
