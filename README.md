@@ -91,7 +91,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/main/instal
 
 ### 版本与发布
 
-每个版本打 `vX.Y.Z` tag，[Releases](../../releases) 里附带打包好的 `vultr-vpn-vX.Y.Z.tar.gz` 和 `SHA256SUMS`。
+每个版本打 `vX.Y.Z` tag，[Releases](../../releases) 里附带打包好的 `vultr-vpn-vX.Y.Z.tar.gz` 和 `SHA256SUMS`，变更说明见 [CHANGELOG.md](CHANGELOG.md)。
 
 生产环境建议**锁定版本**，避免 `main` 上的改动影响正在跑的机器：
 

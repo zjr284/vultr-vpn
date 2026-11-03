@@ -43,5 +43,6 @@ bash setup.sh --links                        # 需要 config.env，否则会提�
 ## 提交规范
 
 - 提交信息用中文，前缀 `feat: / fix: / docs: / chore:`
+- **发版前先在 `CHANGELOG.md` 顶部加一节** `## [vX.Y.Z] - YYYY-MM-DD`（`### 新增 / ### 修复`），release workflow 会把这一节作为 Release 正文；没有这一节才回退到自动生成的英文 notes
 - 发版：`git tag -a vX.Y.Z -m "..."` + `git push origin vX.Y.Z`，Release 由 workflow 自动生成
 - 改 README 的"快速开始"时必须同步 `docs/02-deploy.md`，两边都在被用户直接照抄
