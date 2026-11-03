@@ -43,6 +43,7 @@ set -- "${PASS[@]}"
 command -v curl >/dev/null || die "缺少 curl"
 
 # ---- 本地已经有仓库？直接用
+export VULTR_VPN_REF="$REF"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo /nonexistent)"
 if [ -f "$SELF_DIR/setup.sh" ] && [ -f "$SELF_DIR/scripts/sub.py" ]; then
   log "使用本地副本: $SELF_DIR"

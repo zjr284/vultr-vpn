@@ -10,6 +10,7 @@
 #     bash setup.sh --check                  # 只体检，不改任何配置
 #     bash setup.sh --links                  # 只打印节点链接
 #     bash setup.sh --cert-only              # 只补签证书
+#     bash setup.sh --json                   # 末尾多打一行 VPN_JSON={...}，给 agent 解析
 #     bash setup.sh --reset                  # 重新生成全部密钥（客户端要重导）
 #
 #  首次运行会在同目录生成 config.env（含随机密钥）和 clients/（客户端配置），
@@ -29,7 +30,7 @@ die()  { echo "${RED}[x ]${NC} $*" >&2; exit 1; }
 [ "$(id -u)" = "0" ] || die "请用 root 运行"
 command -v apt-get >/dev/null || die "只支持 Debian / Ubuntu"
 
-MODE="deploy"; ARG_DOMAIN=""; ARG_VULTR_KEY=""; ARG_VULTR_FW=""; RESET=0
+MODE="deploy"; ARG_DOMAIN=""; ARG_VULTR_KEY=""; ARG_VULTR_FW=""; RESET=0; JSON_OUT=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --domain)     ARG_DOMAIN="$2"; shift 2;;
@@ -38,9 +39,10 @@ while [ $# -gt 0 ]; do
     --links)      MODE="links"; shift;;
     --check)      MODE="check"; shift;;
     --cert-only)  MODE="cert"; shift;;
+    --json)       JSON_OUT=1; shift;;
     --reset)      RESET=1; shift;;
     --yes)        shift;;
-    -h|--help)    sed -n '3,17p' "$0"; exit 0;;
+    -h|--help)    sed -n '6,18p' "$0"; exit 0;;
     *) die "未知参数: $1";;
   esac
 done
@@ -533,6 +535,17 @@ ufw route allow in on wg0 out on "$IFACE" >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------- 汇总
 SUB_URL="http://$DOMAIN/$SUB_TOKEN.txt"
+
+# --json：只吐一行机器可读结果，供 agent 解析（日志仍在 stderr 之外，用 grep ^VPN_JSON= 取）
+if [ "$JSON_OUT" = "1" ]; then
+  L1="$(links | sed -n '1p')"
+  L2="$(links | sed -n '2p')"
+  CERT_JSON=false; [ "$HAVE_CERT" = "1" ] && CERT_JSON=true
+  printf 'VPN_JSON={"host":"%s","domain":"%s","subscription":"%s","reality":"%s","hysteria2":"%s","cert":%s,"wg_port":"%s","ref":"%s"}\n' \
+    "$PUB_IP" "$DOMAIN" "$SUB_URL" "$L1" "$L2" "$CERT_JSON" "$WG_PORT" "${VULTR_VPN_REF:-unknown}"
+  exit 0
+fi
+
 echo
 echo "==============================================================="
 echo " 部署完成"
