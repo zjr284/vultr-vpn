@@ -21,6 +21,7 @@
 10. [常见问题](#10-常见问题)
 11. [费用与流量](#11-费用与流量)
 12. [安全与合规](#12-安全与合规)
+13. [进阶：换成自己的域名](#13-进阶换成自己的域名推荐)
 
 ---
 
@@ -34,7 +35,7 @@
 | 一部手机 | Android 或 iPhone |
 | 一个 Vultr 账号 | 国外云服务商，支持支付宝 |
 | 约 40 元人民币 | 最低充值 $10，按小时计费，不用了随时删 |
-| 40 分钟 | 第一次做会慢一点，熟练后 10 分钟 |
+| 30–40 分钟 | 第一次做会慢一点，熟练后 10 分钟 |
 
 ### 你会得到什么
 
@@ -74,6 +75,8 @@
 > 💡 **不用买域名**：脚本会用 `sslip.io` 的公共泛解析。
 > 比如你的服务器 IP 是 `203.0.113.10`，域名就是 `203-0-113-10.sslip.io`，
 > 它会自动解析回这个 IP，完全够用，也支持申请证书。
+>
+> （以后想换成自己的域名更稳，见文末 [第 13 节](#13-进阶换成自己的域名推荐)，5 分钟。）
 
 ---
 
@@ -92,9 +95,12 @@
 | Plan | **vc2-1c-1gb**（$5/月） | 1 核 1G，够跑三条通道 |
 | Auto Backups | **关掉** | 会额外收费 20% |
 | IPv6 | 开（默认就开着） | 多一条路 |
-| SSH Keys | 可以先跳过 | 后面用密码登录 |
+| SSH Keys | **留空，先跳过** | 选了密钥就只能用密钥登录，新手容易卡住；留空才会给你 root 密码 |
 | Hostname | `tokyo` 或随便 | 只是名字 |
 | Server Quantity | `1` | |
+
+> 🔥 **Firewall Group 保持 None**。Vultr 新账号默认没有防火墙组，等于全端口开放，脚本一会儿会自动签发证书。
+> 如果你之前建过防火墙组并在这里选中了它，必须放行：`tcp 22、80、443` 和 `udp 443、51821`，否则第 5 步一定卡在证书上。
 
 拉到最下面点 **Deploy Now**。
 
@@ -123,7 +129,10 @@ Password   : xxxxxxxx          ← 点右边的眼睛图标显示
 ### Windows
 
 1. 按 `Win` 键，输入 **PowerShell**，回车（不用管理员）
-2. 输入下面这行（把 IP 换成你的）：
+2. 输入下面这行（把 IP 换成你的）
+
+> 📋 **怎么粘贴**：复制命令后，在 PowerShell 窗口里**点右键**就会自动粘贴（或者按 `Ctrl+V`）。
+> 只复制命令本身，别把前面灰色的 `PS C:\>` 一起复制进来。
 
 ```powershell
 ssh root@203.0.113.10
@@ -161,7 +170,7 @@ ssh root@203.0.113.10
 | 报错 | 原因 & 解决 |
 |---|---|
 | `Connection timed out` | IP 错了 / 服务器还没 Running / 你的网络拦了 22 端口。换手机热点试试 |
-| `Permission denied (publickey)` | Vultr 实例是密钥登录模式。去实例页面重置 root 密码，或改用 `View Password` |
+| `Permission denied (publickey)` | 创建服务器时选了 SSH Key，就不再允许密码登录。最省事是**删掉重建、SSH Keys 留空**；或者在你电脑上用密钥登录 `ssh -i 密钥文件 root@IP` |
 | `REMOTE HOST IDENTIFICATION HAS CHANGED` | 你重建过机器，IP 还是旧的指纹。执行 `ssh-keygen -R 203.0.113.10` 再连 |
 | `ssh: command not found`（Windows 老版本） | Win10 1809 以下没有自带 ssh。装 Git for Windows 或用 PuTTY |
 
@@ -174,6 +183,12 @@ ssh root@203.0.113.10
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/main/install.sh)
 ```
+
+> 🌐 **如果这条命令卡住不动或报 `Failed to connect`**：是 GitHub 在国内偶尔连不上，直接换成下面这条镜像（内容和上面完全一样），不用等：
+>
+> ```bash
+> bash <(curl -fsSL https://ghproxy.net/https://raw.githubusercontent.com/zjr284/vultr-vpn/main/install.sh)
+> ```
 
 然后等 **3–6 分钟**，屏幕上会滚动很多 `[+ ]` 开头的日志，别关窗口。
 
@@ -235,6 +250,7 @@ http://203-0-113-10.sslip.io/dsh-sub-1a2b3c4d.txt
 ```
 
 > 这个地址浏览器也能打开，里面是两行编码后的节点。**别发到群里**。
+> 它是 http 明文的（80 端口，没加密）——图的是"不用证书也能访问"，代价是谁拿到这个地址谁就能用你的节点。
 
 ---
 
@@ -244,7 +260,9 @@ http://203-0-113-10.sslip.io/dsh-sub-1a2b3c4d.txt
 
 1. 下载安装 **v2rayNG**
    - GitHub：https://github.com/2dust/v2rayNG/releases
-   - 找 `v2rayNG_x.x.x_arm64-v8a.apk`（现在的手机基本都是 arm64），或 `universal`
+   - 找 `v2rayNG_x.x.x_arm64-v8a.apk`（现在的手机基本都是 arm64），或名字带 `universal` 的那个
+   - 手机浏览器打不开 GitHub 时，在链接前面加镜像前缀再打开：
+     `https://ghproxy.net/https://github.com/2dust/v2rayNG/releases`
    - 装的时候手机会提示"未知来源"，允许即可
 2. 打开 v2rayNG → 左上角 **☰** → **订阅分组设置**
 3. 右上角 **+** → **添加订阅**
@@ -255,6 +273,9 @@ http://203-0-113-10.sslip.io/dsh-sub-1a2b3c4d.txt
 6. 会多出两个节点：`Tokyo-Reality` 和 `Tokyo-Hysteria2`
 7. **先选 `Tokyo-Reality`**（更稳）→ 点右下角灰色圆形按钮变成**绿色 V**
 8. 打开浏览器访问 **https://api.ip.sb/ip**，显示你的服务器 IP 就成功了
+
+> 🔁 **更新订阅失败？** 先把连接断开（点一下圆形按钮变回灰色），再点「更新订阅」。
+> 因为订阅地址是 http 的，走代理去更新自己会死循环；断着更新才稳。
 
 > **选哪个节点？**
 > - 看视频、日常用 → **Reality**（延迟低、抖动小）
@@ -279,8 +300,12 @@ iOS 没有免费的同类客户端，需要**非国区 Apple ID**：
 ### Windows：v2rayN
 
 1. 下载：https://github.com/2dust/v2rayN/releases
-   - 选 `v2rayN-windows-64.zip`（不需要 .NET 那个也行）
+   - 选 `v2rayN-windows-64.zip`；打不开 GitHub 就在网址前加 `https://ghproxy.net/`
+   - 双击提示缺少 .NET 的话，改下名字里带 `SelfContained` 的包
 2. 解压到任意目录，双击 `v2rayN.exe`
+
+> ⚙️ **第一次打开会弹窗问"是否下载 Xray 内核"，点确定。**
+> 这一步要从 GitHub 拉文件，国内可能很慢或失败；失败了就重新打开软件再试一次，或者挂上手机热点。
 3. 顶部菜单 **订阅** → **订阅设置** → **添加**
    - 备注：`东京`
    - 地址：粘贴订阅地址
@@ -291,15 +316,15 @@ iOS 没有免费的同类客户端，需要**非国区 Apple ID**：
 
 ### macOS
 
-推荐 **V2rayU** 或直接命令行：
+推荐图形客户端，配置方式和 Windows 一样：**订阅地址 → 导入 → 选节点**。
 
-```bash
-# 用 hysteria 客户端（脚本已经生成了配置）
-brew install hysteria
-hysteria client -c ~/hysteria.yaml
-```
+| 客户端 | 说明 |
+|---|---|
+| **Clash Verge Rev** | 界面新、支持订阅和自动分流，装完在「订阅」里粘贴地址即可 |
+| **V2rayU** | 老牌客户端，更新慢但能用 |
 
-大多数人用图形客户端就够了，配置方式和 Windows 一样：订阅地址 → 导入 → 选节点。
+> ⚠️ 别在 Mac 上手动跑 `hysteria client -c ~/hysteria.yaml`：那份配置在**服务器**上，本机没有这个文件。
+> 真想用命令行，得先把服务器上的 `hysteria.yaml` 用 `scp` 拉到本地，再改里面的地址——不值得，用图形客户端省事。
 
 ---
 
@@ -476,6 +501,58 @@ bash /opt/vultr-vpn/setup.sh --cert-only
 
 **关于隐私**：你的流量在服务器上是明文出口的（这是所有代理的共性）。
 访问敏感网站时，自己心里要有数。
+
+---
+
+## 13. 进阶：换成自己的域名（推荐）
+
+用 sslip.io 有个硬伤：**域名是从 IP 编出来的**。服务器一换 IP，域名立刻失效，订阅地址也得跟着改。
+自己买个域名（¥30–80/年）就能一劳永逸：以后换服务器只改一条 DNS 记录，客户端不用动。
+
+### 三步搞定
+
+**1. 买域名**
+
+阿里云 / 腾讯云 / Cloudflare 都行，`.com` 首年 ¥60 左右。买完必须做**实名认证**（国内强制）。
+认证通过前，域名会被注册局挂起（状态 `clientHold`），此时**解析怎么配都不生效**——这一步最容易卡住人。
+
+**2. 加一条 A 记录**
+
+在域名控制台的「DNS 解析」里加：
+
+| 主机记录 | 记录类型 | 记录值 |
+|---|---|---|
+| `vpn` | `A` | 你的服务器 IP |
+
+意思是让 `vpn.你的域名.com` 指向这台服务器。保存后一般 5–10 分钟生效。
+
+**3. 在服务器上切过来**
+
+```bash
+bash /opt/vultr-vpn/setup.sh --domain vpn.你的域名.com
+```
+
+脚本会重新签证书、把 Hysteria2 的 SNI 换成新域名、刷新订阅内容。跑完把新订阅地址重新导入客户端即可。
+
+### 怎么确认真的生效了
+
+在**你自己的电脑**上执行（不是服务器上）：
+
+```bash
+nslookup vpn.你的域名.com
+```
+
+返回你的服务器 IP 就对了。如果返回 `NXDOMAIN` 或者找不到，去查域名状态：
+只要注册局那栏还是 `client hold`，就是实名没过，等审核就行，跟脚本无关。
+
+### 换 IP 之后怎么办
+
+1. 旧服务器上备份 `/opt/vultr-vpn/config.env`
+2. 新机器装好、跑完安装
+3. **回 DNS 控制台，把 A 记录改成新 IP**
+4. 客户端点「更新订阅」——完成
+
+这就是买域名唯一但足够大的好处：**换机器不再是"重新部署"，而是"改一条记录"**。
 
 ---
 
