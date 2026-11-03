@@ -388,15 +388,26 @@ fi
 if [ "$need_cert" = "1" ]; then
   log "签发 Let's Encrypt 证书: $DOMAIN"
   ufw allow 80/tcp >/dev/null 2>&1 || true
+  # 订阅服务占着 80（HTTP-01 要独占），签发期间让出来
+  sub_was_running=0
+  if systemctl is-active --quiet dsh-sub; then
+    sub_was_running=1
+    systemctl stop dsh-sub >/dev/null 2>&1 || true
+    sleep 1
+  fi
   if certbot certonly --standalone --non-interactive --agree-tos \
        --register-unsafely-without-email -d "$DOMAIN" >/tmp/certbot.log 2>&1; then
     log "证书签发成功"
   else
     warn "签发失败，日志: /tmp/certbot.log"
+    grep -qi 'already in use\|Could not bind' /tmp/certbot.log 2>/dev/null && \
+      warn "80 端口被占用：先 systemctl stop dsh-sub 再重试"
     warn "常见原因: 云厂商防火墙未放行 tcp 80（规则生效有 1~3 分钟延迟）"
     warn "放行后执行: bash setup.sh --cert-only"
+    [ "$sub_was_running" = "1" ] && { systemctl start dsh-sub >/dev/null 2>&1 || true; }
     [ "$MODE" = "cert" ] && die "中止"
   fi
+  [ "$sub_was_running" = "1" ] && { systemctl start dsh-sub >/dev/null 2>&1 || true; }
 fi
 
 if [ -f "$CERT" ]; then
