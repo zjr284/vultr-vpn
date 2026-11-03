@@ -43,20 +43,43 @@ flowchart LR
     N --> I((Internet))
 ```
 
-## 快速开始
+## 快速开始（一行）
+
+在全新装好的 Ubuntu 22.04 / 24.04 上，以 root 执行：
 
 ```bash
-# 1. 上传到服务器
-scp setup.sh root@<YOUR_SERVER_IP>:/root/
-
-# 2. 一条命令部署
-ssh root@<YOUR_SERVER_IP> "bash /root/setup.sh"
-
-# 或者用自己的域名（推荐）
-ssh root@<YOUR_SERVER_IP> "bash /root/setup.sh --domain vpn.example.com"
+bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/main/install.sh) --domain vpn.example.com
 ```
 
-跑完会打印：
+这一行里包含：下载仓库 → 装依赖 → 内核调优 → 三通道配置 → 签证书 → 起订阅服务 → 打印节点链接和订阅二维码。
+
+### 连防火墙也不用碰控制台
+
+有 Vultr API Key 的话（控制台 → Account → API），把端口放行也交给脚本：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/main/install.sh) \
+     --vultr-key "$VULTR_API_KEY" --vultr-fw vpn --domain vpn.example.com
+```
+
+它会自动：按公网 IP 找到本机实例 → 没挂防火墙组就建一个并挂上 → 放行 `tcp 22/80/443`、`udp 443/51821`。
+
+> **API Key 有 IP 白名单**，必须包含这台机器出口的公网 IP，否则返回 `401 Unauthorized IP address`。
+> 国内访问 `raw.githubusercontent.com` 不稳的话，用镜像前缀：
+> `bash <(curl -fsSL https://ghproxy.net/https://raw.githubusercontent.com/zjr284/vultr-vpn/main/install.sh)`，
+> 或者 `git clone` 下来直接 `bash setup.sh`（本地有 `setup.sh` 时 `install.sh` 会用本地副本）。
+
+### 常用命令
+
+| 命令 | 作用 |
+|---|---|
+| `bash setup.sh --check` | 体检：服务、端口、证书剩余天数、订阅、防火墙 |
+| `bash setup.sh --links` | 只打印节点链接（不碰任何配置） |
+| `bash setup.sh --domain vpn.example.com` | 换域名：重签证书 + 换 Hysteria2 SNI + 刷新订阅 |
+| `bash setup.sh --cert-only` | 证书没签下来时补签 |
+| `bash setup.sh --reset` | 重新生成全部密钥（客户端要重新导入） |
+
+跑完会打印类似：
 
 ```
 ===============================================================
@@ -66,32 +89,44 @@ ssh root@<YOUR_SERVER_IP> "bash /root/setup.sh --domain vpn.example.com"
    Reality  : tcp 443
    Hysteria2: udp 443
    订阅地址 : http://vpn.example.com/dsh-sub-xxxxxxxx.txt
-   客户端   : /root/clients/{windows,wsl,phone}.conf
+   客户端   : /opt/vultr-vpn/clients/{windows,wsl,phone}.conf
 ===============================================================
+
+【订阅二维码】（客户端扫这个，不要扫单节点）
+  █▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
+  ...
 ```
 
-把订阅地址贴进客户端，完事。
+浏览器打开订阅域名根路径，还有一个网页版清单（订阅地址 + 两个节点 + 一键复制）。
 
 ## 脚本做了什么
 
 | 步骤 | 内容 |
 |---|---|
-| 1 | 装 wireguard-tools / xray / hysteria / certbot |
-| 2 | 内核调优：BBR + fq + 32MB 缓冲区 |
+| 1 | 装 wireguard-tools / xray / hysteria / certbot / qrencode |
+| 2 | 内核调优：BBR + fq + 32MB 缓冲区 + `ip_forward` |
 | 3 | 写 `wg0.conf`（服务端 + 三个 peer），开 IP 转发和 MASQUERADE |
 | 4 | 写 Xray Reality 配置（uTLS 指纹 chrome，SNI 用真实站点） |
-| 5 | certbot 申请证书 → 部署给 Hysteria2 → 装续期 hook |
+| 5 | 云防火墙自动放行（给了 API Key 时）→ certbot 签证书 → 装续期 hook |
 | 6 | 写 Hysteria2 配置（含 QUIC 窗口调优） |
-| 7 | 起订阅服务（systemd `dsh-sub`） |
-| 8 | 配 ufw，生成三份客户端配置 |
+| 7 | 起订阅服务（systemd `dsh-sub`），80 明文 + 8443 HTTPS |
+| 8 | 配 ufw，生成三份客户端配置，打印链接与二维码 |
+
+几个容易翻车的地方脚本已经替你处理：
+
+- **sshd 占着 443** 的机器：自动把它改回 22，否则 Xray 起不来
+- **证书续期**时 80 被订阅服务占用：renewal 配置里加了 `pre_hook/post_hook` 临时停启
+- **不覆盖旧配置**：`config.env` 存在就复用密钥，重跑只做增量
+- **防火墙规则有延迟**：签发失败时会提示等 2 分钟再 `--cert-only`
 
 ## 目录结构
 
 ```
 .
+├── install.sh            # 一行入口（下载仓库并调用 setup.sh）
 ├── setup.sh              # 主脚本
 ├── config.example.env    # 配置模板（真实配置是 config.env，已 gitignore）
-├── scripts/sub.py        # 订阅服务
+├── scripts/sub.py        # 订阅服务（含网页版清单）
 ├── docs/
 │   ├── 01-server.md      # 选机器、开防火墙
 │   ├── 02-deploy.md      # 部署细节与报错

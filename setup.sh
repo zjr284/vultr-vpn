@@ -6,8 +6,11 @@
 #  用法（root，Ubuntu 22.04/24.04）:
 #     bash setup.sh                          # 用 <IP>.sslip.io 域名
 #     bash setup.sh --domain vpn.example.com # 用自己的域名（推荐）
+#     bash setup.sh --vultr-key KEY --vultr-fw vpn   # 连防火墙一起开好
+#     bash setup.sh --check                  # 只体检，不改任何配置
 #     bash setup.sh --links                  # 只打印节点链接
 #     bash setup.sh --cert-only              # 只补签证书
+#     bash setup.sh --reset                  # 重新生成全部密钥（客户端要重导）
 #
 #  首次运行会在同目录生成 config.env（含随机密钥）和 clients/（客户端配置），
 #  两者都已在 .gitignore 里，不会也不该被提交。
@@ -26,13 +29,18 @@ die()  { echo "${RED}[x ]${NC} $*" >&2; exit 1; }
 [ "$(id -u)" = "0" ] || die "请用 root 运行"
 command -v apt-get >/dev/null || die "只支持 Debian / Ubuntu"
 
-MODE="deploy"; ARG_DOMAIN=""
+MODE="deploy"; ARG_DOMAIN=""; ARG_VULTR_KEY=""; ARG_VULTR_FW=""; RESET=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --domain)    ARG_DOMAIN="$2"; shift 2;;
-    --links)     MODE="links"; shift;;
-    --cert-only) MODE="cert"; shift;;
-    -h|--help)   sed -n '3,14p' "$0"; exit 0;;
+    --domain)     ARG_DOMAIN="$2"; shift 2;;
+    --vultr-key)  ARG_VULTR_KEY="$2"; shift 2;;
+    --vultr-fw)   ARG_VULTR_FW="$2"; shift 2;;
+    --links)      MODE="links"; shift;;
+    --check)      MODE="check"; shift;;
+    --cert-only)  MODE="cert"; shift;;
+    --reset)      RESET=1; shift;;
+    --yes)        shift;;
+    -h|--help)    sed -n '3,17p' "$0"; exit 0;;
     *) die "未知参数: $1";;
   esac
 done
@@ -42,7 +50,7 @@ export DEBIAN_FRONTEND=noninteractive
 if ! command -v xray >/dev/null || ! command -v wg >/dev/null; then
   log "安装依赖（wireguard-tools / curl / certbot / xray）"
   apt-get update -qq
-  apt-get install -y -qq wireguard-tools iptables curl ca-certificates certbot python3 >/dev/null
+  apt-get install -y -qq wireguard-tools iptables curl ca-certificates certbot python3 qrencode >/dev/null
   if ! command -v xray >/dev/null; then
     bash -c "$(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install >/dev/null
   fi
@@ -96,10 +104,22 @@ EOF
   chmod 600 "$CONFIG"
 }
 
+if [ "$RESET" = "1" ] && [ -f "$CONFIG" ]; then
+  warn "--reset：删除旧配置，重新生成密钥（客户端需要重新导入）"
+  rm -f "$CONFIG"
+fi
 [ -f "$CONFIG" ] || gen_config
 # 补全老配置里缺的字段
 [ -n "${SUB_TOKEN:-}" ] || { SUB_TOKEN="dsh-sub-$(openssl rand -hex 4)"; echo "SUB_TOKEN=\"$SUB_TOKEN\"" >>"$CONFIG"; }
 [ -n "${HY2_PASSWORD:-}" ] || { HY2_PASSWORD="$(openssl rand -hex 8)"; echo "HY2_PASSWORD=\"$HY2_PASSWORD\"" >>"$CONFIG"; }
+# 云厂商 API（可选，用于自动开防火墙）
+if [ -n "$ARG_VULTR_KEY" ] && [ "$ARG_VULTR_KEY" != "${VULTR_API_KEY:-}" ]; then
+  sed -i '/^VULTR_API_KEY=/d;/^VULTR_FW_NAME=/d' "$CONFIG"
+  echo "VULTR_API_KEY=\"$ARG_VULTR_KEY\"" >>"$CONFIG"
+  [ -n "$ARG_VULTR_FW" ] && echo "VULTR_FW_NAME=\"$ARG_VULTR_FW\"" >>"$CONFIG"
+fi
+VULTR_API_KEY="${VULTR_API_KEY:-}"
+VULTR_FW_NAME="${VULTR_FW_NAME:-${ARG_VULTR_FW:-vpn}}"
 # 允许 --domain 覆盖
 if [ -n "$ARG_DOMAIN" ] && [ "$ARG_DOMAIN" != "$(grep -oP '^DOMAIN="\K[^"]*' "$CONFIG" || true)" ]; then
   sed -i "s|^DOMAIN=.*|DOMAIN=\"$ARG_DOMAIN\"|" "$CONFIG"
@@ -116,6 +136,58 @@ links() {
 }
 
 if [ "$MODE" = "links" ]; then links; exit 0; fi
+
+# ---------------------------------------------------------------- 体检
+check() {
+  local fail=0
+  printf '%-26s %-10s %s\n' "检查项" "结果" "说明"
+  printf '%-26s %-10s %s\n' "------" "----" "----"
+  row() { printf '%-26s %-10s %s\n' "$1" "$2" "$3"; }
+
+  for s in wg-quick@wg0 xray hysteria-server dsh-sub; do
+    if systemctl is-active --quiet "$s"; then row "服务 $s" "OK" ""
+    else row "服务 $s" "FAIL" "systemctl status $s"; fail=1; fi
+  done
+
+  port_open() { ss -lnu 2>/dev/null | grep -q ":$1 " || ss -lnt 2>/dev/null | grep -q ":$1 "; }
+  if port_open "$WG_PORT"; then row "WireGuard udp/$WG_PORT" "OK" ""; else row "WireGuard udp/$WG_PORT" "FAIL" "未监听"; fail=1; fi
+  if port_open 443; then row "TCP 443 (Reality)" "OK" ""; else row "TCP 443 (Reality)" "FAIL" "未监听"; fail=1; fi
+
+  if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+    local exp days
+    exp="$(openssl x509 -in "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" -noout -enddate | cut -d= -f2)"
+    days=$(( ( $(date -d "$exp" +%s) - $(date +%s) ) / 86400 ))
+    if [ "$days" -gt 10 ]; then row "证书 $DOMAIN" "OK" "剩 $days 天"
+    else row "证书 $DOMAIN" "WARN" "剩 $days 天，执行 bash setup.sh --cert-only"; fi
+  else
+    row "证书 $DOMAIN" "FAIL" "无证书，Hysteria2 会连不上"; fail=1
+  fi
+
+  if curl -fsS --max-time 6 "http://127.0.0.1/$SUB_TOKEN.txt" -o /dev/null; then
+    row "订阅（本机 80）" "OK" "http://$DOMAIN/$SUB_TOKEN.txt"
+  else
+    row "订阅（本机 80）" "FAIL" "dsh-sub 未响应"; fail=1
+  fi
+
+  if [ -n "${VULTR_API_KEY:-}" ]; then
+    local inst fw
+    inst="$(curl -sS -H "Authorization: Bearer $VULTR_API_KEY" https://api.vultr.com/v2/instances \
+            | python3 -c 'import sys,json;d=json.load(sys.stdin);print(next((i.get("firewall_group_id","") for i in d["instances"] if i["main_ip"]=="'"$PUB_IP"'"),""))' 2>/dev/null || true)"
+    if [ -n "$inst" ]; then
+      fw="$(curl -sS -H "Authorization: Bearer $VULTR_API_KEY" "https://api.vultr.com/v2/firewalls/$inst/rules" \
+            | python3 -c 'import sys,json;d=json.load(sys.stdin);print(",".join(sorted({f"{r[\"protocol\"]}/{r[\"port\"]}" for r in d["firewall_rules"]})))' 2>/dev/null || true)"
+      row "Vultr 防火墙组" "OK" "${fw:-空}"
+    else
+      row "Vultr 防火墙组" "WARN" "该实例未挂防火墙组（=所有端口放行）"
+    fi
+  fi
+
+  echo
+  if [ "$fail" = "1" ]; then warn "存在 FAIL 项，按说明修复后重跑 --check"; return 1; fi
+  log "全部关键项正常"
+}
+
+if [ "$MODE" = "check" ]; then check || exit 1; exit 0; fi
 
 # ---------------------------------------------------------------- 内核调优
 log "写入内核/网络调优"
@@ -171,6 +243,15 @@ fi
 systemctl enable wg-quick@wg0 >/dev/null 2>&1 || true
 systemctl restart wg-quick@wg0 || warn "wg-quick 启动失败，检查 /etc/wireguard/wg0.conf"
 
+# ---------------------------------------------------------------- 端口冲突
+# 有些机器为了让 SSH 穿过封锁，会把 sshd 也放一个监听在 443 —— 那样 Xray 起不来
+if grep -rqsE '^[[:space:]]*Port[[:space:]]+443' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/ 2>/dev/null; then
+  warn "检测到 sshd 监听 443，改为只监听 22（443 让给 Xray）"
+  sed -i -E 's/^[[:space:]]*Port[[:space:]]+443[[:space:]]*$/Port 22/' /etc/ssh/sshd_config.d/*.conf 2>/dev/null || true
+  sed -i -E 's/^[[:space:]]*Port[[:space:]]+443[[:space:]]*$/Port 22/' /etc/ssh/sshd_config 2>/dev/null || true
+  systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
+fi
+
 # ---------------------------------------------------------------- Xray
 log "写入 Xray Reality 配置"
 mkdir -p /usr/local/etc/xray
@@ -220,6 +301,10 @@ systemctl enable xray >/dev/null 2>&1 || true
 systemctl restart xray
 
 # ---------------------------------------------------------------- 证书
+# 先把 80 放出去，否则 HTTP-01 验证必然超时
+ufw allow 80/tcp >/dev/null 2>&1 || true
+vultr_firewall
+
 CERT="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
 KEY="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
 HAVE_CERT=0
@@ -371,6 +456,54 @@ write_client windows "$CLIENT_WINDOWS_PRIVKEY" 10.8.0.2
 write_client wsl     "$CLIENT_WSL_PRIVKEY"     10.8.0.3
 write_client phone   "$CLIENT_PHONE_PRIVKEY"   10.8.0.4
 
+# ---------------------------------------------------------------- 云防火墙
+# 有 VULTR_API_KEY 时自动把 22/80/443/udp443/udp51821 开好，省掉最容易翻车的一步
+vultr_firewall() {
+  [ -n "${VULTR_API_KEY:-}" ] || return 0
+  command -v python3 >/dev/null || { warn "缺 python3，跳过云防火墙自动配置"; return 0; }
+  log "配置 Vultr 防火墙（组: $VULTR_FW_NAME）"
+  local api="https://api.vultr.com/v2"
+  local inst iid fw have spec proto port
+  inst="$(curl -sS -H "Authorization: Bearer $VULTR_API_KEY" "$api/instances" 2>/dev/null | python3 -c '
+import sys, json
+ip = sys.argv[1]
+d = json.load(sys.stdin)
+for i in d.get("instances", []):
+    if i.get("main_ip") == ip:
+        print(i["id"], i.get("firewall_group_id") or "-")
+        break
+' "$PUB_IP" || true)"
+  if [ -z "$inst" ]; then
+    warn "API 查不到实例 $PUB_IP（key 的 IP 白名单可能不含本机出口 IP），跳过"
+    return 0
+  fi
+  iid="${inst%% *}"; fw="${inst##* }"
+  if [ "$fw" = "-" ]; then
+    fw="$(curl -sS -X POST -H "Authorization: Bearer $VULTR_API_KEY" -H "Content-Type: application/json" \
+          -d "{\"description\":\"$VULTR_FW_NAME\"}" "$api/firewalls" \
+          | python3 -c 'import sys,json;print(json.load(sys.stdin)["firewall_group"]["id"])' 2>/dev/null || true)"
+    [ -n "$fw" ] && curl -sS -X PUT -H "Authorization: Bearer $VULTR_API_KEY" -H "Content-Type: application/json" \
+          -d "{\"firewall_group_id\":\"$fw\"}" "$api/instances/$iid" >/dev/null 2>&1 || true
+    log "新建防火墙组并挂载: ${fw:-失败}"
+  fi
+  [ -n "$fw" ] || return 0
+  have="$(curl -sS -H "Authorization: Bearer $VULTR_API_KEY" "$api/firewalls/$fw/rules" 2>/dev/null \
+          | python3 -c 'import sys,json;d=json.load(sys.stdin);print(" ".join(sorted({r["protocol"]+":"+str(r["port"]) for r in d.get("firewall_rules",[]) if r.get("subnet")=="0.0.0.0/0"})))' 2>/dev/null || true)"
+  for spec in "tcp:22" "tcp:80" "tcp:443" "udp:443" "udp:$WG_PORT"; do
+    proto="${spec%%:*}"; port="${spec##*:}"
+    case " $have " in *" $spec "*) continue;; esac
+    if curl -sS -X POST -H "Authorization: Bearer $VULTR_API_KEY" -H "Content-Type: application/json" \
+         -d "{\"protocol\":\"$proto\",\"port\":\"$port\",\"subnet\":\"0.0.0.0/0\",\"ip_type\":\"v4\",\"notes\":\"vpn-auto\"}" \
+         "$api/firewalls/$fw/rules" -o /dev/null -w '%{http_code}' | grep -q '^20'; then
+      log "放行 $proto/$port"
+    else
+      warn "放行 $proto/$port 失败（规则可能已存在）"
+    fi
+    sleep 1
+  done
+  warn "云防火墙规则生效有 1~3 分钟延迟，证书签发失败就等两分钟再 bash setup.sh --cert-only"
+}
+
 # ---------------------------------------------------------------- 防火墙
 log "配置 ufw"
 ufw --force enable >/dev/null 2>&1 || true
@@ -380,6 +513,7 @@ done
 ufw route allow in on wg0 out on "$IFACE" >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------- 汇总
+SUB_URL="http://$DOMAIN/$SUB_TOKEN.txt"
 echo
 echo "==============================================================="
 echo " 部署完成"
@@ -387,10 +521,28 @@ echo "   服务器   : $PUB_IP   ($DOMAIN)"
 echo "   WireGuard: udp $WG_PORT"
 echo "   Reality  : tcp 443"
 echo "   Hysteria2: udp 443"
-echo "   订阅地址 : http://$DOMAIN/$SUB_TOKEN.txt"
+echo "   订阅地址 : $SUB_URL"
 echo "   客户端   : $CLIENTS/{windows,wsl,phone}.conf"
 echo "==============================================================="
+echo
+echo "【节点链接】"
 links
 echo
-echo "记得在云厂商防火墙放行: tcp 22 / 80 / 443，udp 443 / $WG_PORT"
-[ "$HAVE_CERT" = "1" ] || warn "当前是自签证书，放行 tcp 80 后执行: bash setup.sh --cert-only"
+if command -v qrencode >/dev/null 2>&1; then
+  echo "【订阅二维码】（客户端扫这个，不要扫单节点）"
+  qrencode -t ANSIUTF8 -m 1 "$SUB_URL" || true
+  echo
+fi
+echo "【下一步】"
+echo "  1) 手机  : v2rayNG → 订阅分组 → 添加订阅 → 粘贴上面地址 → 更新"
+echo "  2) Windows: v2rayN → 订阅 → 订阅设置 → 添加 → 更新；再开「路由→绕过大陆」"
+echo "  3) 体检  : bash setup.sh --check"
+echo "  4) 换域名: bash setup.sh --domain 新域名   （自动重签证书并刷新订阅）"
+echo
+if [ "$HAVE_CERT" = "1" ]; then
+  log "证书就绪，Hysteria2 用正式证书，客户端无需跳过校验"
+else
+  warn "当前是自签证书：Hysteria2 可能连不上。放行 tcp 80 后执行: bash setup.sh --cert-only"
+fi
+[ -n "${VULTR_API_KEY:-}" ] || warn "未提供 --vultr-key：记得在云厂商控制台手动放行 tcp 22/80/443 与 udp 443/$WG_PORT"
+
