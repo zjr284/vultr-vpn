@@ -70,8 +70,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 text = base64.b64decode(raw).decode("utf-8", "replace").strip()
             except Exception:
                 continue
-            url = "http://%s/%s" % (self.headers.get("Host", ""), n)
-            cards.append(CARD % ("订阅地址", html.escape(url)))
+            host = self.headers.get("Host", "")
+            cards.append(CARD % ("订阅地址（HTTP）", html.escape("http://%s/%s" % (host, n))))
+            if os.path.exists(CERT) and os.path.exists(KEY):
+                cards.append(CARD % ("订阅地址（HTTPS，推荐）",
+                                     html.escape("https://%s:8443/%s" % (host, n))))
             for line in text.splitlines():
                 line = line.strip()
                 if not line:

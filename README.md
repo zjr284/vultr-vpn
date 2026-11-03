@@ -113,7 +113,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/v1.1.0/inst
    WireGuard: udp 51821
    Reality  : tcp 443
    Hysteria2: udp 443
-   订阅地址 : http://vpn.example.com/dsh-sub-xxxxxxxx.txt
+   订阅地址 : https://vpn.example.com:8443/dsh-sub-xxxxxxxx.txt
+   （HTTPS 需云防火墙放行 tcp 8443；未放行就用下面这条）
+   HTTP备用 : http://vpn.example.com/dsh-sub-xxxxxxxx.txt
    客户端   : /opt/vultr-vpn/clients/{windows,wsl,phone}.conf
 ===============================================================
 

@@ -547,14 +547,18 @@ ufw route allow in on wg0 out on "$IFACE" >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------- 汇总
 SUB_URL="http://$DOMAIN/$SUB_TOKEN.txt"
+SUB_URL_TLS=""
+[ -f "$CERT" ] && SUB_URL_TLS="https://$DOMAIN:8443/$SUB_TOKEN.txt"
+# 优先用 HTTPS（客户端不会提示"不安全的 HTTP"），但需要云防火墙放行 8443
+SUB_PREF="${SUB_URL_TLS:-$SUB_URL}"
 
 # --json：只吐一行机器可读结果，供 agent 解析（日志仍在 stderr 之外，用 grep ^VPN_JSON= 取）
 if [ "$JSON_OUT" = "1" ]; then
   L1="$(links | sed -n '1p')"
   L2="$(links | sed -n '2p')"
   CERT_JSON=false; [ "$HAVE_CERT" = "1" ] && CERT_JSON=true
-  printf 'VPN_JSON={"host":"%s","domain":"%s","subscription":"%s","reality":"%s","hysteria2":"%s","cert":%s,"wg_port":"%s","ref":"%s"}\n' \
-    "$PUB_IP" "$DOMAIN" "$SUB_URL" "$L1" "$L2" "$CERT_JSON" "$WG_PORT" "${VULTR_VPN_REF:-unknown}"
+  printf 'VPN_JSON={"host":"%s","domain":"%s","subscription":"%s","subscription_tls":"%s","reality":"%s","hysteria2":"%s","cert":%s,"wg_port":"%s","ref":"%s"}\n' \
+    "$PUB_IP" "$DOMAIN" "$SUB_URL" "$SUB_URL_TLS" "$L1" "$L2" "$CERT_JSON" "$WG_PORT" "${VULTR_VPN_REF:-unknown}"
   exit 0
 fi
 
@@ -565,7 +569,11 @@ echo "   服务器   : $PUB_IP   ($DOMAIN)"
 echo "   WireGuard: udp $WG_PORT"
 echo "   Reality  : tcp 443"
 echo "   Hysteria2: udp 443"
-echo "   订阅地址 : $SUB_URL"
+echo "   订阅地址 : $SUB_PREF"
+if [ -n "$SUB_URL_TLS" ]; then
+  echo "   （HTTPS 需云防火墙放行 tcp 8443；未放行就用下面这条）"
+  echo "   HTTP备用 : $SUB_URL"
+fi
 echo "   客户端   : $CLIENTS/{windows,wsl,phone}.conf"
 echo "==============================================================="
 echo
@@ -574,7 +582,7 @@ links
 echo
 if command -v qrencode >/dev/null 2>&1; then
   echo "【订阅二维码】（客户端扫这个，不要扫单节点）"
-  qrencode -t ANSIUTF8 -m 1 "$SUB_URL" || true
+  qrencode -t ANSIUTF8 -m 1 "$SUB_PREF" || true
   echo
 fi
 echo "【下一步】"

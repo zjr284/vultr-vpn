@@ -1,8 +1,14 @@
 # 03 · 客户端配置
 
-订阅地址形如：`http://vpn.example.com/dsh-sub-xxxxxxxx.txt`
+订阅地址形如：
+
+- `https://vpn.example.com:8443/dsh-sub-xxxxxxxx.txt`（推荐，需要云防火墙放行 tcp 8443）
+- `http://vpn.example.com/dsh-sub-xxxxxxxx.txt`（备用，明文；v2rayNG/v2rayN 会提示"不安全的 HTTP"）
 
 内容是一串 base64，解码后是两行节点链接（Reality + Hysteria2）。WireGuard 不放进订阅，因为它需要独立的 `.conf` 文件。
+
+> ⚠️ **客户端提示"请不要使用不安全的 HTTP 协议订阅地址"怎么办？**
+> 优先把地址换成 `https://域名:8443/...`；如果暂时没放行 8443，就在客户端里打开「允许不安全的 HTTP 地址」开关（v2rayNG 在订阅设置最下方）。
 
 ---
 
