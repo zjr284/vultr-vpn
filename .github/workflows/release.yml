@@ -1,0 +1,31 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 打包
+        run: |
+          mkdir -p dist
+          tar --exclude=.git --exclude=dist \
+              -czf "dist/vultr-vpn-${GITHUB_REF_NAME}.tar.gz" .
+          cd dist
+          sha256sum "vultr-vpn-${GITHUB_REF_NAME}.tar.gz" > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/SHA256SUMS

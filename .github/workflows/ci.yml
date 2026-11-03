@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: bash 语法检查
+        run: |
+          bash -n setup.sh
+          bash -n install.sh
+
+      - name: shellcheck（只报 error 级）
+        run: shellcheck -S error setup.sh install.sh
+
+      - name: Python 语法检查
+        run: python3 -m py_compile scripts/sub.py
+
+      - name: 敏感信息扫描
+        run: |
+          set +e
+          hits=$(grep -rnE '45\.77\.|sslip\.io/dsh-sub-[0-9a-f]{8}' \
+                  --include='*.md' --include='*.sh' --include='*.py' . \
+                | grep -v 'docs/beginner.md' \
+                | grep -v '203-0-113-10' || true)
+          if [ -n "$hits" ]; then
+            echo "发现可疑的真实地址/密钥，请检查："
+            echo "$hits"
+            exit 1
+          fi
+          echo "clean"
