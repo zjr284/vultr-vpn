@@ -321,6 +321,55 @@ EOF
 systemctl enable xray >/dev/null 2>&1 || true
 systemctl restart xray
 
+# ---------------------------------------------------------------- 云防火墙
+# 有 VULTR_API_KEY 时自动把 22/80/443/udp443/udp51821 开好，省掉最容易翻车的一步
+vultr_firewall() {
+  [ -n "${VULTR_API_KEY:-}" ] || return 0
+  command -v python3 >/dev/null || { warn "缺 python3，跳过云防火墙自动配置"; return 0; }
+  log "配置 Vultr 防火墙（组: $VULTR_FW_NAME）"
+  local api="https://api.vultr.com/v2"
+  local inst iid fw have spec proto port
+  inst="$(curl -sS -H "Authorization: Bearer $VULTR_API_KEY" "$api/instances" 2>/dev/null | python3 -c '
+import sys, json
+ip = sys.argv[1]
+d = json.load(sys.stdin)
+for i in d.get("instances", []):
+    if i.get("main_ip") == ip:
+        print(i["id"], i.get("firewall_group_id") or "-")
+        break
+' "$PUB_IP" || true)"
+  if [ -z "$inst" ]; then
+    warn "API 查不到实例 $PUB_IP（key 的 IP 白名单可能不含本机出口 IP），跳过"
+    return 0
+  fi
+  iid="${inst%% *}"; fw="${inst##* }"
+  if [ "$fw" = "-" ]; then
+    fw="$(curl -sS -X POST -H "Authorization: Bearer $VULTR_API_KEY" -H "Content-Type: application/json" \
+          -d "{\"description\":\"$VULTR_FW_NAME\"}" "$api/firewalls" \
+          | python3 -c 'import sys,json;print(json.load(sys.stdin)["firewall_group"]["id"])' 2>/dev/null || true)"
+    [ -n "$fw" ] && curl -sS -X PUT -H "Authorization: Bearer $VULTR_API_KEY" -H "Content-Type: application/json" \
+          -d "{\"firewall_group_id\":\"$fw\"}" "$api/instances/$iid" >/dev/null 2>&1 || true
+    log "新建防火墙组并挂载: ${fw:-失败}"
+  fi
+  [ -n "$fw" ] || return 0
+  have="$(curl -sS -H "Authorization: Bearer $VULTR_API_KEY" "$api/firewalls/$fw/rules" 2>/dev/null \
+          | python3 -c 'import sys,json;d=json.load(sys.stdin);print(" ".join(sorted({r["protocol"]+":"+str(r["port"]) for r in d.get("firewall_rules",[]) if r.get("subnet")=="0.0.0.0/0"})))' 2>/dev/null || true)"
+  for spec in "tcp:22" "tcp:80" "tcp:443" "udp:443" "udp:$WG_PORT"; do
+    proto="${spec%%:*}"; port="${spec##*:}"
+    case " $have " in *" $spec "*) continue;; esac
+    if curl -sS -X POST -H "Authorization: Bearer $VULTR_API_KEY" -H "Content-Type: application/json" \
+         -d "{\"protocol\":\"$proto\",\"port\":\"$port\",\"subnet\":\"0.0.0.0/0\",\"ip_type\":\"v4\",\"notes\":\"vpn-auto\"}" \
+         "$api/firewalls/$fw/rules" -o /dev/null -w '%{http_code}' | grep -q '^20'; then
+      log "放行 $proto/$port"
+    else
+      warn "放行 $proto/$port 失败（规则可能已存在）"
+    fi
+    sleep 1
+  done
+  warn "云防火墙规则生效有 1~3 分钟延迟，证书签发失败就等两分钟再 bash setup.sh --cert-only"
+}
+
+
 # ---------------------------------------------------------------- 证书
 # 先把 80 放出去，否则 HTTP-01 验证必然超时
 ufw allow 80/tcp >/dev/null 2>&1 || true
@@ -476,54 +525,6 @@ EOF
 write_client windows "$CLIENT_WINDOWS_PRIVKEY" 10.8.0.2
 write_client wsl     "$CLIENT_WSL_PRIVKEY"     10.8.0.3
 write_client phone   "$CLIENT_PHONE_PRIVKEY"   10.8.0.4
-
-# ---------------------------------------------------------------- 云防火墙
-# 有 VULTR_API_KEY 时自动把 22/80/443/udp443/udp51821 开好，省掉最容易翻车的一步
-vultr_firewall() {
-  [ -n "${VULTR_API_KEY:-}" ] || return 0
-  command -v python3 >/dev/null || { warn "缺 python3，跳过云防火墙自动配置"; return 0; }
-  log "配置 Vultr 防火墙（组: $VULTR_FW_NAME）"
-  local api="https://api.vultr.com/v2"
-  local inst iid fw have spec proto port
-  inst="$(curl -sS -H "Authorization: Bearer $VULTR_API_KEY" "$api/instances" 2>/dev/null | python3 -c '
-import sys, json
-ip = sys.argv[1]
-d = json.load(sys.stdin)
-for i in d.get("instances", []):
-    if i.get("main_ip") == ip:
-        print(i["id"], i.get("firewall_group_id") or "-")
-        break
-' "$PUB_IP" || true)"
-  if [ -z "$inst" ]; then
-    warn "API 查不到实例 $PUB_IP（key 的 IP 白名单可能不含本机出口 IP），跳过"
-    return 0
-  fi
-  iid="${inst%% *}"; fw="${inst##* }"
-  if [ "$fw" = "-" ]; then
-    fw="$(curl -sS -X POST -H "Authorization: Bearer $VULTR_API_KEY" -H "Content-Type: application/json" \
-          -d "{\"description\":\"$VULTR_FW_NAME\"}" "$api/firewalls" \
-          | python3 -c 'import sys,json;print(json.load(sys.stdin)["firewall_group"]["id"])' 2>/dev/null || true)"
-    [ -n "$fw" ] && curl -sS -X PUT -H "Authorization: Bearer $VULTR_API_KEY" -H "Content-Type: application/json" \
-          -d "{\"firewall_group_id\":\"$fw\"}" "$api/instances/$iid" >/dev/null 2>&1 || true
-    log "新建防火墙组并挂载: ${fw:-失败}"
-  fi
-  [ -n "$fw" ] || return 0
-  have="$(curl -sS -H "Authorization: Bearer $VULTR_API_KEY" "$api/firewalls/$fw/rules" 2>/dev/null \
-          | python3 -c 'import sys,json;d=json.load(sys.stdin);print(" ".join(sorted({r["protocol"]+":"+str(r["port"]) for r in d.get("firewall_rules",[]) if r.get("subnet")=="0.0.0.0/0"})))' 2>/dev/null || true)"
-  for spec in "tcp:22" "tcp:80" "tcp:443" "udp:443" "udp:$WG_PORT"; do
-    proto="${spec%%:*}"; port="${spec##*:}"
-    case " $have " in *" $spec "*) continue;; esac
-    if curl -sS -X POST -H "Authorization: Bearer $VULTR_API_KEY" -H "Content-Type: application/json" \
-         -d "{\"protocol\":\"$proto\",\"port\":\"$port\",\"subnet\":\"0.0.0.0/0\",\"ip_type\":\"v4\",\"notes\":\"vpn-auto\"}" \
-         "$api/firewalls/$fw/rules" -o /dev/null -w '%{http_code}' | grep -q '^20'; then
-      log "放行 $proto/$port"
-    else
-      warn "放行 $proto/$port 失败（规则可能已存在）"
-    fi
-    sleep 1
-  done
-  warn "云防火墙规则生效有 1~3 分钟延迟，证书签发失败就等两分钟再 bash setup.sh --cert-only"
-}
 
 # ---------------------------------------------------------------- 防火墙
 log "配置 ufw"
