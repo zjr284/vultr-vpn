@@ -63,7 +63,7 @@ agent 会自己跑命令、验证、最后把**订阅地址**交给你。你要�
 python3 scripts/agent_deploy.py \
   --host 203.0.113.10 \
   --ssh-key ~/.ssh/id_ed25519 \
-  --ref v1.0.0
+  --ref v1.1.0
 ```
 
 ### 模式 B：从零开一台（付费，自动配防火墙）
@@ -74,7 +74,7 @@ python3 scripts/agent_deploy.py \
   --vultr-key "$VULTR_API_KEY" \
   --region nrt \
   --pubkey ~/.ssh/id_ed25519.pub \
-  --ref v1.0.0
+  --ref v1.1.0
 ```
 
 想先看它要干什么：
@@ -94,7 +94,7 @@ python3 scripts/agent_deploy.py --host 203.0.113.10 --dry-run
   "hysteria2": "hysteria2://...",
   "cert": true,
   "wg_port": "51821",
-  "ref": "v1.0.0",
+  "ref": "v1.1.0",
   "check_ok": true,
   "checks": ["服务 wg-quick@wg0  OK", "..."],
   "subscription_ok": true,
@@ -129,7 +129,7 @@ python3 scripts/agent_deploy.py --host 203.0.113.10 --dry-run
 ssh -i KEY root@HOST 'lsb_release -ds; uname -m'      # 期望 Ubuntu 22.04/24.04
 
 # 2) 一行安装（--json 让脚本末尾吐一行机器可读结果）
-ssh -i KEY root@HOST 'bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/v1.0.0/install.sh) --ref v1.0.0 --json'
+ssh -i KEY root@HOST 'bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/v1.1.0/install.sh) --ref v1.1.0 --json'
 
 # 3) 从输出里 grep 出：  VPN_JSON={...}
 
@@ -181,7 +181,7 @@ agent 干完活之后，剩下三件**必须人来做**的事：
 | 项目 | 状态 |
 |---|---|
 | `--json` 输出格式 | ✅ 在真实服务器上跑通 |
-| SSH 模式（已有服务器） | ✅ 端到端跑通（v1.0.0） |
+| SSH 模式（已有服务器） | ✅ 端到端跑通（v1.1.0） |
 | `--check` 体检 | ✅ 全绿输出已验证 |
 | 订阅可达性检查 | ✅ 200 验证 |
 | 模式 B（Vultr API 建机） | ⚠️ 代码完成，但**未在真实 API 上跑通**（测试时 Key 已失效/白名单不含测试机） |

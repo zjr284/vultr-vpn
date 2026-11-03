@@ -20,6 +20,7 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -27,6 +28,7 @@ import urllib.error
 import urllib.request
 
 REPO = os.environ.get("VULTR_VPN_REPO", "zjr284/vultr-vpn")
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 DEFAULT_REF = os.environ.get("VULTR_VPN_REF", "main")
 VULTR_API = "https://api.vultr.com/v2"
 
@@ -166,7 +168,7 @@ def deploy(host, key, args):
     cmd = "bash <(curl -fsSL %s) --ref %s %s" % (url, args.ref, " ".join(flags))
     code, out, err = ssh(host, key, cmd, timeout=1200)
     if code != 0:
-        tail = "\n".join((out + err).strip().splitlines()[-12:])
+        tail = "\n".join(ANSI_RE.sub("", (out + err)).strip().splitlines()[-12:])
         die(4, "安装脚本失败", tail)
 
     line = ""
@@ -179,7 +181,8 @@ def deploy(host, key, args):
 
     log("安装完成，开始体检")
     ccode, cout, _ = ssh(host, key, "bash /opt/vultr-vpn/setup.sh --check", timeout=120)
-    checks = [l for l in cout.splitlines() if l.strip() and not l.startswith("[")]
+    plain = ANSI_RE.sub("", cout)
+    checks = [l.strip() for l in plain.splitlines() if l.strip() and not l.strip().startswith("[")]
     info["check_ok"] = (ccode == 0)
     info["checks"] = checks
     if ccode != 0:

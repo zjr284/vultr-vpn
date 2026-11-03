@@ -9,6 +9,8 @@
 写这套东西的起因很简单：市面上的"一键脚本"要么只给一种协议，要么把密钥写死在脚本里、换个 IP 就得重配所有客户端。这里的目标是——**换服务器时，客户端只需要改一个地址**。
 
 > 🚀 **第一次接触服务器？** 先看 [**零基础教程**](docs/beginner.md)：不用买域名、不用懂 Linux，全程复制粘贴，30 分钟从注册 Vultr 到手机能上网。
+>
+> 🤖 **想让 AI 帮你部署？** 把 [docs/agent-deploy.md](docs/agent-deploy.md) 丢给 Claude Code / Codex / Cursor / DSH 这类会执行命令的 agent，它会自己连服务器、装好、体检、验证订阅，最后只把订阅地址交给你。人只需要提供 SSH 和一句“帮我部署”。
 
 ---
 
@@ -92,8 +94,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/main/instal
 生产环境建议**锁定版本**，避免 `main` 上的改动影响正在跑的机器：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/v1.0.0/install.sh) \
-     --ref v1.0.0 --domain vpn.example.com
+bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/v1.1.0/install.sh) \
+     --ref v1.1.0 --domain vpn.example.com
 ```
 
 不写 `--ref` 时跟随 `main`（最新）。CI 会在每次推送时跑 `bash -n`、`shellcheck -S error`、Python 语法检查，以及一段"真实 IP/密钥泄漏"扫描。
