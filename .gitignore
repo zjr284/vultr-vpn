@@ -1,0 +1,7 @@
+# 运行时生成，绝不提交
+config.env
+clients/
+*.pem
+*.key
+*.conf
+!config.example.env
