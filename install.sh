@@ -58,9 +58,20 @@ done
 tar xzf "$TMP/src.tar.gz" -C "$TMP"
 SRC="$(find "$TMP" -maxdepth 2 -name setup.sh -printf '%h\n' | head -1)"
 [ -n "$SRC" ] || die "压缩包结构异常"
+
+# 保留旧机器上的密钥与客户端配置：重装/重建时客户端才不用重新导入
+if [ -d "$DEST" ]; then
+  for f in config.env; do
+    [ -f "$DEST/$f" ] && cp -a "$DEST/$f" "$TMP/keep-$f"
+  done
+  [ -d "$DEST/clients" ] && cp -a "$DEST/clients" "$TMP/keep-clients"
+fi
+
 rm -rf "$DEST"
 mkdir -p "$DEST"
 cp -a "$SRC"/. "$DEST"/
+[ -f "$TMP/keep-config.env" ] && { cp -a "$TMP/keep-config.env" "$DEST/config.env"; log "复用已有 config.env（密钥不变）"; }
+[ -d "$TMP/keep-clients" ] && cp -a "$TMP/keep-clients" "$DEST/clients"
 log "已展开到 $DEST"
 
 exec bash "$DEST/setup.sh" "$@"

@@ -4,6 +4,8 @@
 
 写这套东西的起因很简单：市面上的"一键脚本"要么只给一种协议，要么把密钥写死在脚本里、换个 IP 就得重配所有客户端。这里的目标是——**换服务器时，客户端只需要改一个地址**。
 
+> 🚀 **第一次接触服务器？** 先看 [**零基础教程**](docs/beginner.md)：不用买域名、不用懂 Linux，全程复制粘贴，30 分钟从注册 Vultr 到手机能上网。
+
 ---
 
 ## 特性
@@ -128,6 +130,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/zjr284/vultr-vpn/main/instal
 ├── config.example.env    # 配置模板（真实配置是 config.env，已 gitignore）
 ├── scripts/sub.py        # 订阅服务（含网页版清单）
 ├── docs/
+│   ├── beginner.md       # 零基础教程（不买域名、复制粘贴即可）
 │   ├── 01-server.md      # 选机器、开防火墙
 │   ├── 02-deploy.md      # 部署细节与报错
 │   ├── 03-clients.md     # 手机 / Windows / WSL

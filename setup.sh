@@ -70,6 +70,16 @@ DOMAIN="${ARG_DOMAIN:-${DOMAIN:-}}"
 : "${DOMAIN:=${PUB_IP//./-}.sslip.io}"
 [ "$MODE" = "links" ] && { DOMAIN="${ARG_DOMAIN:-${DOMAIN}}"; }
 
+# sslip.io 域名是从 IP 派生的：换机器后要跟着变，否则证书/订阅还指向旧 IP
+case "$DOMAIN" in
+  *.sslip.io|*.nip.io|*.traefik.me)
+    if [ "$DOMAIN" != "${PUB_IP//./-}.sslip.io" ] && [ -z "$ARG_DOMAIN" ]; then
+      warn "域名 $DOMAIN 与当前公网 IP 不匹配，自动改用 ${PUB_IP//./-}.sslip.io"
+      DOMAIN="${PUB_IP//./-}.sslip.io"
+      [ -f "$CONFIG" ] && sed -i "s|^DOMAIN=.*|DOMAIN=\"$DOMAIN\"|" "$CONFIG"
+    fi;;
+esac
+
 gen_config() {
   log "生成配置（随机密钥）"
   WG_SERVER_PRIVKEY="$(wg genkey)"
